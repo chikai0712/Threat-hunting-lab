@@ -18,6 +18,10 @@ flowchart LR
     E --> D[偵測與事件關聯]
     D --> I[調查案件 / 時間線 / 證據]
     I --> P[回應提案與人工核准]
+    D -.證據集合.-> AI[資安 LLM / RAG 輔助分析]
+    KB[Runbook / CTI / 歷史 RCA] --> AI
+    AI --> REVIEW[分析師檢視]
+    REVIEW --> I
     P -.改善規則.-> D
     T[授權 Lab 攻擊模擬] -.驗證偵測.-> D
 ```
@@ -33,6 +37,9 @@ flowchart LR
 | [系統架構](docs/architecture.md) | 分層、模組責任、資料流與邊界 |
 | [來源接入設計](docs/source-ingestion.md) | 七類來源、IP 設定、獨立 API 與 Syslog 路由 |
 | [API 與資料契約](docs/contracts.md) | HTTP 語義、共同模型、去重、版本與錯誤 |
+| [AI 分析架構](docs/ai-analysis-architecture.md) | 偵測模型、資安 LLM、RAG 與五種 Agent 的接點 |
+| [模型候選矩陣](docs/ai-model-candidates.md) | Hugging Face 研究候選、查核欄位與選型順序 |
+| [AI 契約與評估](docs/ai-contracts-evaluation.md) | Evidence bundle、分析結果、評估指標與降級 |
 | [環境確認表](docs/environment-checklist.md) | 設備、網段、流量、容量、權限與責任人 |
 | [架構決策記錄](docs/decisions.md) | 已確認原則與待決策項目 |
 | [工具整合矩陣](docs/integrations.md) | 工具責任、候選介面、目前完成程度 |

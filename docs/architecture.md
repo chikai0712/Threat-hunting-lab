@@ -51,6 +51,12 @@ flowchart TB
     IDX --> DET[偵測與關聯]
     DET --> CASE[案件 / 證據 / Timeline]
     HUNT --> CASE
+    DET --> EVID[證據集合與權限範圍]
+    CASE --> EVID
+    EVID --> AI[AI任務路由 / 資安LLM]
+    KB[版本化知識庫 / RAG] --> AI
+    AI --> VALIDATE[輸出與引用檢查 / 分析師檢視]
+    VALIDATE --> CASE
     CASE --> RESP[回應提案 / 人工核准]
     RESP -.環境與權限定案後.-> EXEC[受控執行 adapter]
 ```
@@ -108,3 +114,9 @@ HTTP 可依 endpoint 區分 profile；Syslog 本身不帶 URL，必須透過可�
 五種角色沿用 [Agent 職責範例](../config/agents.yaml)：Detection、Threat Hunting、Investigation、Response、Purple Team。先定義輸入、工具權限與可引用證據；LLM／MCP provider、憑證、資料外送與執行 policy 尚待確認。回應執行權由獨立政策與身分層決定，不由日誌內容或模型輸出授權。
 
 工具選項與完成程度見 [整合矩陣](integrations.md)。現有程式差距見 [PoC 實作架構](prototype-architecture.md)，後續順序見 [Roadmap](roadmap.md)。
+
+## 資安模型與RAG的擴充設計
+
+AI模組拆為Detection（規則／統計／分類與異常）、Reasoning（案件證據分析）與Knowledge Retrieval（有權限的Runbook／CTI／歷史RCA檢索）。生成模型位於關聯與證據整理之後，不取代來源normalizer；模型離線不阻塞收件或既有規則偵測。
+
+候選包含使用者提供的Foundation-Sec系列、MiST、CyberPal、SecBERT、LAnoBERT、BGE-M3及通用模型baseline，皆待核實精確repo與選型。完整資料流見 [AI分析架構](ai-analysis-architecture.md)，分析輸入／輸出及降級見 [AI契約與評估](ai-contracts-evaluation.md)。

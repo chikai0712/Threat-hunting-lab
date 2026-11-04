@@ -64,3 +64,18 @@
 ## 環境定案輸出
 
 完成盤點後產出：選定部署圖、來源與receiver對照、認證／信任邊界、容量估算、保存政策、優先parser清單、版本矩陣、維運owner與驗收範圍。將選擇與理由寫入 [決策記錄](decisions.md)，再依 [Roadmap](roadmap.md) 排定實作。
+
+## AI／模型／RAG環境補充
+
+| 項目 | 結果 | 影響的設計 |
+| --- | --- | --- |
+| GPU型號／數量／VRAM、CPU／RAM、disk | 待確認 | 模型大小、量化、批次與服務方式 |
+| 模型hosting與網路出口 | 待確認 | 本機／內網／受管endpoint與資料外送範圍 |
+| 精確repo／revision／license／artifact來源 | 待查核 | 可採用模型與可重現部署 |
+| 中文／英文需求與案例語言 | 待確認 | 模型及embedding評估資料 |
+| 任務量、併發、context、延遲與成本 | 待確認 | queue、timeout與配額 |
+| Runbook／CTI／歷史RCA來源、owner、ACL | 待確認 | RAG索引、引用與過期／刪除流程 |
+| 去識別化樣本、標籤與分析師評估人力 | 待確認 | triage／anomaly／hunt驗收集 |
+| 模型與工具使用權限 | 待確認 | job授權、唯讀工具與獨立核准 |
+
+使用者提供研究筆記中的Windows 11、64GB RAM與Intel Ultra 7不視為已確認的本專案環境；不得據此固定部署規格。欄位說明見 [模型候選矩陣](ai-model-candidates.md)。

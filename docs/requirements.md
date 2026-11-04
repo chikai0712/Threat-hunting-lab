@@ -41,3 +41,9 @@
 ## 後續範圍
 
 真實設備設定、廠牌／韌體專用 parser、Kafka／搜尋平台部署、Kubernetes／AWS IaC、正式身分整合、容量調整、外部 DFIR／SOAR 與 AI 工具接線均在環境確認後安排。現有 PoC 只作為設計參考，不以其預設 port、SQLite 或單程序模型替代正式選型。
+
+## AI需求補充
+
+FR-10細化為三項設計：偵測／異常模型產出finding；資安LLM對已有證據進行triage、hunt及RCA輔助；RAG提供有權限且可引用的知識。須保留模型／prompt／檢索版本、未知項與分析師review，並具備模型失效時的降級路徑。
+
+本期僅交付 [AI分析架構](ai-analysis-architecture.md)、[模型候選矩陣](ai-model-candidates.md) 與 [契約／評估計畫](ai-contracts-evaluation.md)。候選模型名稱、授權或效能不得視為已完成驗證。

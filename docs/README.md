@@ -12,6 +12,14 @@
 6. [架構決策記錄](decisions.md)、[工具整合矩陣](integrations.md)：確認選型與依賴。
 7. [分階段計畫與驗收](roadmap.md)：以環境盤點結果決定後續工作。
 
+## AI 資安模型整合文件
+
+- [AI分析架構](ai-analysis-architecture.md)：Detection、Reasoning、Knowledge Retrieval三層與既有Log／案件流程。
+- [模型候選矩陣](ai-model-candidates.md)：使用者提供的Hugging Face候選及待查核清單。
+- [AI契約與評估](ai-contracts-evaluation.md)：分析API草案、證據引用與三種PoC的評估方法。
+
+這三份均為設計文件，未部署模型、RAG或AI API；模型repo、版本、授權與效能未於本輪線上核實。
+
 ## 狀態定義
 
 | 標示 | 意義 |

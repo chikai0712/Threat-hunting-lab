@@ -85,3 +85,7 @@ PoC的解析失敗與API格式錯誤不同：合法raw紀錄即使parser失敗�
 ## 版本與相容性
 
 新增可選欄位優先維持舊consumer相容；欄位改義、改型別、認證或成功語義變更需新版本或明確migration。Raw保存與parser版本讓事件可重新解析；重處理應記錄replay ID及輸出版本，避免默默覆寫調查證據。正式Schema Registry、topic名稱、index mapping與migration方式均待平台選型後實作。
+
+## AI分析契約的延伸
+
+[AI契約與評估](ai-contracts-evaluation.md)定義尚未實作的analysis job、evidence bundle與review介面。來源PUSH API繼續只處理收集與正規化，不因接入IP被允許就取得模型任務、案件或工具執行權限。AI結果引用這份契約的event／raw reference與schema版本，不覆寫原文或正式事件判定。

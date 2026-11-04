@@ -35,3 +35,14 @@
 3. AWS：CloudTrail事件 → 正規化 → 規則命中 → 調查案件。
 
 實際先做哪一項由可取得的設備／樣本與環境決定。驗收步驟見 [Roadmap](roadmap.md)，現有合成案例見 [PoC情境](poc.md)。
+
+## AI能力整合候選
+
+| 能力 | 研究候選 | 接入位置 | 狀態 |
+| --- | --- | --- | --- |
+| SOC／IR生成分析 | Foundation-Sec系列、MiST、CyberPal、Qwen3 baseline | Evidence bundle → task router → structured draft | 未查核精確repo；未部署 |
+| 分類／TTP抽取 | SecBERT、CIRCL ATT&CK Classifier、TTPXHunter、ModernBERT phishing候選 | CTI／分類adapter → finding | 任務頭／標籤與郵件來源需求待確認 |
+| Log異常 | LAnoBERT／來源統計baseline | 正規化事件序列 → anomaly finding | 來源適配與誤報驗證待完成 |
+| RAG retrieval | BGE-M3與待選索引 | 有權限知識片段 → evidence bundle | ACL、語言與檢索品質待確認 |
+
+名稱來自使用者提供研究筆記，非已確認產品規格；詳細查核欄位見 [模型候選矩陣](ai-model-candidates.md)。AI服務錯誤應降級到現有規則與人工調查，不阻斷Log接收。
