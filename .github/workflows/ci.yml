@@ -50,4 +50,6 @@ jobs:
           PYTHON
       - name: Stop test container
         if: always()
-        run: docker rm -f threat-lab-test
+        run: |
+          docker logs threat-lab-test
+          docker rm -f threat-lab-test
