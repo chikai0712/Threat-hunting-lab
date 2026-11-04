@@ -1,54 +1,110 @@
-# 架構與資料流
+# 系統架構
 
-## 目前實作
+狀態：邏輯架構草案。部署拓撲、產品版本、資源容量與正式服務位址待確認。邏輯模組可以先在同一程序實現，再依負載及責任邊界拆分。
 
-單一 FastAPI process + SQLite 適合本機展示與小量事件。API key 在啟動時讀取；token 少於 24 字元會阻止啟動。事件、規則命中及案件建立於同一筆資料庫 transaction，避免部分寫入。每條命中規則建立一個獨立案件，尚未實作跨告警合併。
+## 分層與責任
 
-`/ingest` 以 source + canonical JSON 的 SHA-256 當作事件 ID；同來源且內容相同會去重，但供應商多送一個欄位便視為另一事件。`/events` 則由呼叫端提供全域唯一 event_id；重複 ID 會忽略後送的內容。timestamp 必須含時區。SQLite 單寫入者是 Lab 的容量限制。
+| 層 | 模組 | 輸入 → 輸出 | 主要責任 |
+| --- | --- | --- | --- |
+| 來源層 | 網路／資安設備、OS、軟體、Cloud、K8s | 原始事件 → 協定輸出 | 啟用來源 logging、時間同步與送出策略 |
+| 接入層 | HTTP API、Syslog receiver、agent／collector | PUSH／必要時 PULL → Raw envelope | 協定終結、來源識別、大小限制與接收結果 |
+| 緩衝層 | 持久化佇列／outbox | Raw envelope → 待解析事件 | 承受短暫離線、重試、背壓與失敗隔離 |
+| 轉換層 | Source registry、來源 normalizer | Raw → Normalized／解析失敗 | 版本化欄位映射、時間與型別檢查 |
+| 資料層 | Raw store、Event index、Case store | 原文／事件／案件 → 可查詢資料 | 保存週期、參照、索引與存取控制 |
+| 分析層 | 搜尋、Sigma／規則、關聯引擎 | Event → Finding／Alert | 查詢、時間窗關聯、命中證據與規則版本 |
+| 調查層 | 案件、證據、時間線 | Alert／證據 reference → 調查結果 | 案件生命週期、證據追溯、RCA |
+| 回應層 | 提案、核准、受控執行 adapter | 調查結果 → 提案／稽核 | 角色授權、執行前提、回復計畫 |
+| 改善層 | Purple Team、規則改善 | 授權測試結果 → 覆蓋缺口 | 測試 run 追蹤與實測偵測品質 |
 
-### 正規化事件
-
-| 欄位 | 用途 |
-| --- | --- |
-| event_id | 去重 ID |
-| timestamp | 含時區的原始事件時間 |
-| source | 原有四種原生來源，或自訂的設備／應用程式來源名稱 |
-| host、actor | 可選的主機或操作主體 |
-| action | 描述或 API 操作 |
-| severity | info / low / medium / high / critical |
-| details | 原始 payload，可能包含敏感資訊 |
-
-案件時間線目前只含觸發事件；後續證據收集與 RCA 需由分析者處理。回應狀態為 `pending_approval → approved`，核准後仍為 `execution_enabled=false`。未實作回應執行器。v0.2 collector 可呼叫 Log API／AWS CloudWatch Logs，詳見 [收集指南](log-collection.md)。
-
-## 目標架構（尚未部署）
+## 系統資料流
 
 ```mermaid
 flowchart TB
-    AT[授權 Lab: CALDERA / Atomic / Stratus] --> DS[Endpoint / Network / AWS / K8s]
-    DS --> SE[Wazuh / Suricata / Falco / CloudTrail / Zeek]
-    SE --> K[Kafka raw topics]
-    K --> N[Normalization workers]
-    N --> NK[Kafka normalized topic]
-    NK --> ELK[Elasticsearch / Kibana]
-    NK --> COR[Python / ksqlDB correlation]
-    COR --> AL[Alerts]
-    AL --> IR[DFIR-IRIS cases]
-    IR --> INV[Velociraptor / Timesketch]
-    INV --> RESP[人工核准 / Shuffle workflows]
-    RESP --> RULE[Sigma / detection improvements]
-    RULE --> AT
+    subgraph Sources[來源區域]
+        DEV[Fortinet / Palo Alto / Cisco]
+        HOST[Windows AD / Linux / Applications]
+        CLD[AWS / Kubernetes]
+    end
+    subgraph Ingestion[接入與轉換]
+        SYS[Syslog receiver]
+        API[各來源 HTTP API]
+        AG[Agent / Collector]
+        REG[來源設定與識別]
+        BUF[持久化緩衝]
+        NORM[來源 normalizer]
+        BAD[失敗隔離 / 待重處理]
+    end
+    DEV --> SYS
+    HOST --> AG
+    CLD --> AG
+    AG --> API
+    DEV --> API
+    SYS --> REG
+    API --> REG
+    REG --> BUF
+    BUF --> NORM
+    NORM --> BAD
+    BAD -.修正後重播.-> NORM
+    REG --> RAW[(原始 Log 儲存)]
+    NORM --> IDX[(共同事件 / 搜尋索引)]
+    IDX --> HUNT[Threat Hunting]
+    IDX --> DET[偵測與關聯]
+    DET --> CASE[案件 / 證據 / Timeline]
+    HUNT --> CASE
+    CASE --> RESP[回應提案 / 人工核准]
+    RESP -.環境與權限定案後.-> EXEC[受控執行 adapter]
 ```
 
-Kafka 建議規劃 `dart.raw.<source>`、`dart.events.v1`、`dart.alerts.v1`、`dart.dead-letter.v1`。consumer 成功寫入後才能提交 offset；以 event_id 做冪等寫入，失敗 payload 送 DLQ 並附錯誤原因與 schema 版本。此為待實作契約，現有 API 不會送 Kafka。
+來源 raw reference、source ID、normalizer version 必須隨事件向下傳遞。圖中的 Raw store 與緩衝層可由同一持久化落點起步；正式拆分後需先定義 durability boundary，避免「已回覆成功但尚未保存」的空窗。
 
-ELK 建議依 ECS 建立正式 mapping；現在的簡化 Event **不是完整 ECS**。生產前需定義 schema migration、retention／ILM、個資遮罩、source timestamp 與 ingest timestamp、重送與 backfill 策略。
+## 一筆 PUSH 的處理順序
 
-## AI + MCP 邊界
+```mermaid
+sequenceDiagram
+    participant D as 設備或Agent
+    participant A as 接入層
+    participant R as 來源設定
+    participant B as 持久化落點
+    participant N as Normalizer
+    participant I as 事件索引
+    D->>A: HTTP或Syslog PUSH
+    A->>R: 依endpoint與實際peer辨識來源
+    R-->>A: 來源設定或拒收
+    A->>B: 保存raw與接收metadata
+    Note over A,B: HTTP成功須對應明確的持久化界線
+    A-->>D: HTTP接收結果（Syslog無此確認）
+    B->>N: raw reference與來源版本
+    N->>I: 正規化事件與解析狀態
+    Note over N,I: 失敗保留原文，修正後可重處理
+```
 
-五種角色見 `config/agents.yaml`。此檔沒有執行程式讀取，也不會觸發模型或工具。後續 MCP adapter 應具備工具 allowlist、讀寫權限隔離、來源證據引用及 audit trail。來自日誌、情資及工具回傳的文字都視為不可信資料，不能授權工具執行。回應執行需在身分驗證與政策層獨立實作，不能依賴 prompt 或本版自述 reviewer 欄位。
+目標架構可採非同步流程；現有 PoC HTTP 為同步 transaction，保存 raw 與 event 後回 200。未來若拆出 broker，不可沿用回應形式卻悄悄改變成功語義，需依 [契約](contracts.md) 版本化。
 
-## v0.2 收集儲存
+## Source registry 與設定面
 
-新增 logs 表，既有資料庫啟動時以 CREATE TABLE IF NOT EXISTS 增加，原有資料不需清除。每筆 Log 保存 raw／optional raw_base64、來源 metadata、receipt time 與解析狀態，並在同一 transaction 產生可查詢的通用 Event。泛用 Log 不會直接套用原生四條偵測規則。
+環境變數先表達允許的來源與 receiver 位址；registry 將 source profile、IP／CIDR、協定、normalizer version、metadata 與權限政策串起來。來源種類與實體設備識別應分開：`fortinet` 是 profile，實際設備另以 device_id 表示；多台同廠牌不能只靠 profile 名稱當作唯一設備。
 
-各 collector 的 SQLite outbox 與中央 Store 獨立；forwarder 成功收到 HTTP acknowledgement 後才移除暫存記錄。這是 Lab 等級的持久化重試流程，尚非 Kafka consumer／分散式 exactly-once 系統。
+HTTP 可依 endpoint 區分 profile；Syslog 本身不帶 URL，必須透過可信的來源位址、獨立 listener 或經驗證的 forwarder metadata 選擇 profile。NAT／集中 relay 的條件由 [接入設計](source-ingestion.md) 說明。
+
+## 資料與控制邊界
+
+原始 Log、搜尋事件、案件與稽核資料各有不同保存週期與權限。來源傳來的 host／user／文字為資料，不等同可信身分。PoC 的 IP-only PUSH 與共用 key 是展示機制；正式認證、TLS 終結、代理信任與角色制度需在環境設計中選定。
+
+資料面處理收集、解析與搜尋；設定面處理來源設定、規則版本、權限與保存政策。設定變更應可追溯且可回復；目前 PoC 為重啟載入，動態設定尚未實作。
+
+## 候選部署形態
+
+| 選項 | 適用前提 | 需要先確認 |
+| --- | --- | --- |
+| 單機 Lab | 少量合成／測試事件、允許停機 | 可用 OS、磁碟、port、來源 IP 可見性 |
+| 集中式 VM／主機 | 單一或少數站點、已有維運工具 | 網路分區、持久化、備份、容量與可用性 |
+| 分散式 collector + 中央平台 | 多站點、網段隔離或高流量 | 站點網路、斷線緩衝、中央 broker／index、跨站管理 |
+| Kubernetes／雲端 | 團隊已有該平台及治理能力 | ingress／egress、持久化、secret、IAM、費用與運維 |
+
+目前不指定最終選項。Kafka、Elasticsearch／Kibana、ksqlDB 等都是候選元件；既有 SIEM／訊息平台可先納入整合，避免重複儲存與收集。
+
+## AI／MCP 與工具整合
+
+五種角色沿用 [Agent 職責範例](../config/agents.yaml)：Detection、Threat Hunting、Investigation、Response、Purple Team。先定義輸入、工具權限與可引用證據；LLM／MCP provider、憑證、資料外送與執行 policy 尚待確認。回應執行權由獨立政策與身分層決定，不由日誌內容或模型輸出授權。
+
+工具選項與完成程度見 [整合矩陣](integrations.md)。現有程式差距見 [PoC 實作架構](prototype-architecture.md)，後續順序見 [Roadmap](roadmap.md)。

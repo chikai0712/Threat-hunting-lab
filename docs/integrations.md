@@ -1,34 +1,37 @@
-# 整合狀態與契約
+# 工具與平台整合矩陣
 
-v0.2 已提供通用 Syslog／HTTP／檔案／CloudWatch 收集器，接法見 [Log 收集指南](log-collection.md)。尚未與使用者的實際設備連線驗證。下列「範例轉接器」只表示能接收 `samples/` 中的最小 JSON 結構；正式工具版本與更多事件格式需另外驗證。
+狀態：候選整合設計。選定產品、版本、授權與部署方式在環境確認後決定。本表不表示已連線或必須安裝所有工具。
 
-| 工具 | v0.1 狀態 | 下一個介面 |
-| --- | --- | --- |
-| Wazuh | 範例轉接器 | alerts.json → collector → /ingest |
-| Suricata | 範例轉接器；只接受帶 alert 的事件 | eve.json → collector；flow/dns 等另建模型 |
-| Falco | 範例轉接器 | JSON output / Falcosidekick webhook adapter |
-| AWS CloudTrail | 範例轉接器；單筆事件 | S3/SQS consumer，拆開 Records 陣列 |
-| Kafka / ELK / ksqlDB | 設計 | topic、mapping、consumer 與 DLQ |
-| Sigma | 一份範本；不參與執行 | pySigma pipeline 與後端轉譯測試 |
-| Velociraptor | 設計 | 經授權的 artifact collection，回傳證據 reference |
-| Zeek / RITA | 設計 | conn/dns/http logs、統計特徵與 hunt query |
-| Timesketch | 設計 | timeline CSV/JSON 匯出與查詢 |
-| DFIR-IRIS | 設計；現在使用本地 SQLite 案件 | 本地 case ID ↔ IRIS ID、冪等同步 |
-| Shuffle | 設計 | 具核准 token、稽核及回復步驟的 workflow |
-| MISP / OpenCTI | 設計 | 唯讀 IOC enrichment 與可信度欄位 |
-| CALDERA / Atomic / Stratus | 設計；不執行模擬 | test run ID、授權範圍與預期偵測結果 |
-| Prowler / Trivy | 第二階段 | 雲端／映像弱點資料另外建 findings 模型 |
+| 能力 | 候選工具／平台 | 邏輯介面 | 已有PoC／目前差距 |
+| --- | --- | --- | --- |
+| 原始Log接入 | Syslog、HTTP、Fluent Bit、rsyslog | Raw envelope、來源profile | 有receiver及範例；未做實機驗證 |
+| Endpoint訊號 | Wazuh | 告警JSON／collector | 四種原生adapter之一；僅最小樣本 |
+| Network訊號 | Suricata、Zeek | EVE／conn／dns／http logs | Suricata告警樣本；Zeek欄位與關聯待實作 |
+| Container訊號 | Falco、K8s agent | JSON／HTTP | Falco樣本與通用K8s映射；實機待驗證 |
+| AWS訊號 | CloudTrail、CloudWatch Logs | HTTP relay／SDK／S3-SQS | 有CloudTrail樣本與CloudWatch poller；無帳戶接線 |
+| 緩衝與串流 | Kafka／既有broker | Raw／Normalized／Alert／失敗紀錄 | 僅本機SQLite outbox；正式topic與consumer待定 |
+| 搜尋與SIEM | ELK／既有SIEM | index mapping、查詢、retention | 無外部搜尋平台；PoC使用SQLite |
+| 偵測規則 | Sigma、Python／ksqlDB | 版本化規則與Event references | 四條Python示範；Sigma範本未執行 |
+| 主機調查 | Velociraptor | collection request／evidence reference | 設計，未呼叫API |
+| 時間線 | Timesketch、Hayabusa | timeline事件／匯出 | 設計，未匯入外部平台 |
+| Network分析 | RITA／自訂hunt | Zeek特徵、finding | 設計，未做beacon統計 |
+| 案件管理 | DFIR-IRIS／既有平台 | case與alert/evidence對照 | 本地示範案件；外部同步待定 |
+| 情資 | MISP、OpenCTI | 唯讀IOC／TTP enrichment | 設計，未連線 |
+| 回應工作流 | Shuffle／既有SOAR | 經授權proposal／execution audit | PoC只有提案／自述核准，無執行器 |
+| 攻擊模擬 | CALDERA、Atomic、Stratus | 授權test run／預期與觀察結果 | 僅設計，沒有執行攻擊 |
+| 風險檢測 | Prowler、Trivy | posture／vulnerability findings | 後續候選，需與事件模型區分 |
+| AI／MCP | 待選provider與工具server | 角色、唯讀查詢、證據reference | 僅[角色契約](../config/agents.yaml)，無模型接線 |
 
-## Adapter 約定
+## 模組整合原則
 
-輸入：`{"source":"cloudtrail","payload":{...}}`，以 `samples/` 為可執行契約。缺少必要欄位回傳 422。巢狀 payload 只做最小驗證，正式 collector 必須建立完整 vendor schema 與大小限制。
+每個adapter須說明來源版本、輸入格式、身分／權限、timeout／重試、idempotency、輸出schema與稽核。先定義邏輯介面，再依已選產品映射具體API；此階段不填假定的真實URL或secret。
 
-輸出：正規化 Event（見 `/docs`）。採接收端去重，生產環境需增加 queue、速率限制、TLS／mTLS、OIDC/RBAC、來源認證及保留策略。不能直接將本機 Lab API 暴露到網際網路。
+已有SIEM、broker、案件或agent時，優先評估重用現況。第三方工具的支援版本、授權條款、資源成本與相依服務需在選型時逐項確認。
 
-## 三個第一階段整合里程碑
+## 優先驗證情境候選
 
-1. Wazuh 真實 alert 匯入後，以 case ID 記錄 Velociraptor 蒐證 reference。
-2. Suricata 告警以五元組與時間窗關聯 Zeek 記錄，送 ELK 查詢；目前沒有 beaconing 統計偵測。
-3. CloudTrail 由隔離 AWS 帳戶匯入；將 Stratus 測試 run ID 與命中告警關聯，計算實測結果。
+1. Endpoint：異常登入 → 告警 → 案件 → 主機證據reference。
+2. Network：設備／Suricata訊號 → Zeek關聯 → 調查finding。
+3. AWS：CloudTrail事件 → 正規化 → 規則命中 → 調查案件。
 
-大型第三方工具請依各自官方部署方式與相容版本獨立建置；本 repo 不把所有平台包成一個未驗證的 Compose stack。
+實際先做哪一項由可取得的設備／樣本與環境決定。驗收步驟見 [Roadmap](roadmap.md)，現有合成案例見 [PoC情境](poc.md)。

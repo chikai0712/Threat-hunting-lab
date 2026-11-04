@@ -1,152 +1,60 @@
 # Threat Hunting Lab
 
-將 Attack → Detect → Investigate → Respond → Improve 架構做成可執行的 Python Lab。此專案為獨立練習框架，與 Coupang 或工具供應商無隸屬關係。
+多來源網路、資安設備及軟體 Log 的收集、正規化、偵測、調查與回應架構。
 
-## v0.3 可以做什麼
+**目前階段：架構與文件先行，部署環境待確認。** 本階段先定義模組邊界、資料流、來源 API、設定方式及驗收條件。真實設備串接、平台選型、資源配置與部署將在環境確認後安排。此專案為獨立研究框架，與 Coupang 或工具供應商無隸屬關係。
 
-- **只填來源 IP 即可啟用 PUSH**：`.env` 分別設定七類來源的 IP；每種來源有獨立 `/api/v1/logs/<source>` 正規化 API。
-- `threat-lab` 一次啟動 HTTP + 依設備 IP 路由的 Syslog 接收器，來源 Log 轉成共同 schema 並保留原文。
-- **多來源 Log 收集**：Syslog UDP／TCP／TLS、HTTP JSON／NDJSON／純文字、檔案續讀、AWS CloudWatch Logs 輪詢。
-- 解析 RFC3164／RFC5424、CEF、JSON、key=value；未知格式保留原文，提供來源／主機過濾與 cursor 查詢。
-- collector 具 SQLite outbox、HTTP 重試與檔案 checkpoint；提供 Fortinet、Palo Alto、Cisco、Windows／AD、Linux、AWS、Kubernetes 接入說明。
-- 接收 Wazuh、Suricata、Falco、CloudTrail **範例格式**事件並正規化。
-- 執行四條 Python 示範偵測規則，產生告警與本地調查案件。
-- SQLite 持久化事件、告警、案件及回應提案；相同來源／內容重送時去重。
-- 建立回應提案、記錄核准；不執行隔離主機、封鎖 IP 或停用帳號。
-- 提供 OpenAPI 文件、三個主要 PoC 與 Kubernetes 額外範例、CI 測試。
-
-**尚未完成：** Kafka／ELK 串流、各廠牌實機相容性驗證、完整供應商欄位解析、跨事件關聯、外部 DFIR 工具串接、LLM／MCP 執行、正式環境部署。`config/agents.yaml` 是五種 Agent 的介面規劃；`rules/sigma/` 是規則範本，Python 引擎尚未讀取 Sigma。
-
-## 建議啟動方式：設定 IP，接收設備 PUSH
-
-```bash
-python3 scripts/init_env.py
-# 編輯 .env：填入 FORTINET_IPS、CISCO_IPS、WINDOWS_IPS 等來源設備／agent IP。
-docker compose up --build -d
-```
-
-或安裝 Python 套件後在 repo 根目錄執行 `threat-lab`，會自動讀取 `.env`。來源留白即停用；設定 IP 後，設備可送至收集器 `5514/TCP 或 UDP`，或對應的 `/api/v1/logs/fortinet` 等 API。設備端仍需設定 Log forwarding 目的地。
-
-**[環境變數、七種 API 與完整設定指南](docs/environment-push.md)**。Docker Desktop／NAT 可能改寫來源 IP，首次實機驗證建議用原生 Python 啟動。
-
-## 快速開始：Python
-
-需要 Python 3.9+；新環境建議使用 3.12。
-
-```bash
-git clone https://github.com/chikai0712/Threat-hunting-lab.git
-cd Threat-hunting-lab
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -e '.[dev]'
-export DART_API_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
-uvicorn dart_lab.api:app --host 127.0.0.1 --port 8000 --no-proxy-headers
-```
-
-開啟 <http://127.0.0.1:8000/docs>，在 **Authorize** 輸入剛才產生的 `DART_API_TOKEN`。舊版與查詢 API 都需要 `X-API-Key`；新的來源 PUSH API 預設依 IP 放行，可另外要求 key。`/health` 及 API 文件可直接讀取。
-
-在另一個終端啟用相同 virtualenv，將 `DART_API_TOKEN` 設為啟動服務時使用的同一組值，再執行：
-
-```bash
-python scripts/demo.py
-curl -H "X-API-Key: $DART_API_TOKEN" http://127.0.0.1:8000/cases
-```
-
-首次執行會產生 **4 筆事件、4 筆告警、4 筆案件**；再次執行相同資料不會增加案件。範例資料使用保留的文件用 IP、虛構主機及 AWS 帳號，沒有真實入侵或攻擊命令。
-
-## 接入各類設備與軟體 Log
-
-安裝完成後，先依上方方式啟動 API。在另一個終端設定相同 token，即可啟動收集器：
-
-```bash
-threat-log-collector --source network-lab --spool data/network-outbox.db syslog
-```
-
-預設收集 `127.0.0.1:5514` 的 UDP／TCP Syslog。再開終端執行 `python scripts/send_syslog.py`，會送出 6 筆合成設備 Log，可在 `/docs` 的 `GET /logs` 查詢。
-
-**完整接入方式：[多來源 Log 收集指南](docs/log-collection.md)**，包含七類來源設定、TLS、來源 CIDR、HTTP／Fluent Bit 範例與 AWS IAM／CloudWatch 前提。v0.3 Compose 已內建 IP 自動路由接收器；下方獨立 collector 可供遠端或 TLS 收集使用。
-
-## Docker Compose
-
-```bash
-cp .env.example .env
-# 將 .env 內的 DART_API_TOKEN 設為至少 24 字元的隨機值
-# 可用：python3 -c 'import secrets; print(secrets.token_urlsafe(32))'
-docker compose up --build -d
-```
-
-Compose 依 `LISTEN_IP`（預設全部 IPv4 介面）開放 HTTP 與 TCP／UDP Syslog，資料保存在 `dart-data` volume；所有來源預設留白停用。使用 `threat-lab` 會自動讀 `.env`；直接執行 `uvicorn` 或 demo 則需自行設定環境變數。
-
-## 架構
+## 架構總覽
 
 ```mermaid
 flowchart LR
-    S[Wazuh / Suricata / Falco / CloudTrail 範例] --> A[事件轉接器]
-    A --> E[正規化事件]
-    E --> D[Python 示範偵測規則]
-    D --> C[告警與調查案件]
-    C --> R[回應提案與核准紀錄]
-    E --> DB[(SQLite)]
-    C --> DB
-    R --> DB
-    P[CALDERA / Atomic / Stratus 計畫] -.未串接.-> S
-    E -.後續.-> K[Kafka / ELK / ksqlDB]
-    C -.後續.-> I[Velociraptor / Timesketch / DFIR-IRIS]
+    S[網路設備 / 資安平台 / OS / Cloud / K8s] --> C[來源接入與收集]
+    C --> B[持久化緩衝與重送]
+    B --> N[各來源正規化模組]
+    C --> R[原始 Log 保存]
+    N --> E[共同事件模型]
+    N --> Q[解析失敗與重處理]
+    E --> H[搜尋 / Threat Hunting]
+    E --> D[偵測與事件關聯]
+    D --> I[調查案件 / 時間線 / 證據]
+    I --> P[回應提案與人工核准]
+    P -.改善規則.-> D
+    T[授權 Lab 攻擊模擬] -.驗證偵測.-> D
 ```
 
-## 專案目錄
+這是邏輯設計，不代表所有元件都已部署，也不要求每個模組都獨立成微服務。Kafka、ELK、Kubernetes、AWS 與各資安工具保留為候選技術，環境確認後再決定。
+
+## 文件入口
+
+| 文件 | 內容 |
+| --- | --- |
+| [文件索引與閱讀順序](docs/README.md) | 文件狀態、設計與 PoC 的區別 |
+| [需求與範圍](docs/requirements.md) | 本期目標、功能需求、延後事項 |
+| [系統架構](docs/architecture.md) | 分層、模組責任、資料流與邊界 |
+| [來源接入設計](docs/source-ingestion.md) | 七類來源、IP 設定、獨立 API 與 Syslog 路由 |
+| [API 與資料契約](docs/contracts.md) | HTTP 語義、共同模型、去重、版本與錯誤 |
+| [環境確認表](docs/environment-checklist.md) | 設備、網段、流量、容量、權限與責任人 |
+| [架構決策記錄](docs/decisions.md) | 已確認原則與待決策項目 |
+| [工具整合矩陣](docs/integrations.md) | 工具責任、候選介面、目前完成程度 |
+| [分階段計畫與驗收](docs/roadmap.md) | 文件完成後的環境確認與實作順序 |
+
+## 現有程式定位
+
+Repo 已有 v0.3 PoC，供後續參考：Python API、七種來源 endpoint、初版 normalizer、Syslog／檔案／CloudWatch collector、SQLite 暫存與示範案件流程。這些實作曾通過合成資料測試及 CI 容器收件檢查，**尚未完成使用者環境與實機相容性驗證**。
+
+既有程式、測試與設定範例保留；目前不以「立即部署」作為下一步。需要查閱程式操作時請看 [PoC 參考手冊](docs/prototype-guide.md) 與 [PoC 環境變數接入方式](docs/environment-push.md)。部署與維運參數不能直接以 PoC 預設值定案。
+
+## 專案結構
 
 ```text
-dart_lab/           API、資料模型、轉接器、規則及 SQLite 儲存
-samples/            合成事件：Endpoint / Network / AWS / Container
-scripts/demo.py     重播四組事件
-rules/sigma/        Sigma 規則範本（尚未接入執行引擎）
-config/agents.yaml  五種 Agent 職責與工具邊界（設計）
-config/collectors/ Fluent Bit / rsyslog 設定範例
-docs/               架構、整合契約、PoC、後續計畫
-tests/             行為與 API 測試
+docs/                  架構、需求、契約、環境確認與 PoC 參考文件
+config/                Agent 職責與 collector 設定範例
+dart_lab/              已建立的 PoC 程式
+samples/               合成事件樣本
+rules/                 示範規則範本
+scripts/               PoC 初始化與測試資料工具
+tests/                 PoC 行為與整合測試
+compose.yaml           PoC 容器配置，非正式部署定案
 ```
 
-## API 與回應流程
-
-| Endpoint | 功能 |
-| --- | --- |
-| `POST /api/v1/logs/{source}` | 七種獨立來源 PUSH／正規化 API，依環境變數授權 IP |
-| `GET /api/v1/sources` | 查詢啟用來源設定（需要 key） |
-| `POST /logs`、`GET /logs` | 通用 Log 批次匯入與 cursor 查詢 |
-| `POST /collect/{source}` | Agent HTTP JSON / NDJSON / text 匯入 |
-| `POST /ingest` | `{source, payload}` 供應商範例格式 |
-| `POST /events` | 直接送入正規化事件 |
-| `GET /events`、`/alerts`、`/cases` | 最近資料；`limit` 預設 100、上限 1000 |
-| `GET /cases/{id}` | 案件與初始事件時間線 |
-| `GET /coverage` | 已實作規則與 ATT&CK 標籤清單 |
-| `POST /cases/{id}/responses` | 建立回應提案 |
-| `GET /responses` | 回應提案與核准狀態 |
-| `POST /responses/{id}/approve` | 記錄人工核准；沒有執行 API |
-
-`/coverage` **不是經測量的偵測覆蓋率**。泛用 Suricata 告警不會一律標註為 C2。MITRE 標籤僅是調查分類提示，不代表已確認攻擊。
-
-回應提案範例：
-
-```json
-{
-  "action": "collect_evidence",
-  "target": "lab-endpoint-01",
-  "rationale": "確認異常登入的來源與時間線"
-}
-```
-
-核准 body：`{"reviewer":"lab-analyst","note":"限隔離 Lab，記錄核准"}`。本版共用 API key，reviewer 為自述欄位，**不提供身分驗證或雙人覆核**；核准紀錄只是 Lab 工作流程，不應作為正式控制措施。
-
-## 開發驗證
-
-```bash
-python -m pip install -e '.[dev]'
-ruff check .
-pytest -q
-```
-
-GitHub Actions 會在 Python 3.9／3.12 跑測試、檢查 Compose，並另外建置容器。依賴版本固定於 `pyproject.toml`；尚未提供包含所有間接依賴的 lockfile。
-
-深入說明：[架構](docs/architecture.md) · [工具整合契約](docs/integrations.md) · [PoC 步驟](docs/poc.md) · [Roadmap](docs/roadmap.md) · [安全與資料邊界](SECURITY.md)
+下一步是依 [環境確認表](docs/environment-checklist.md) 盤點實際環境，再更新決策記錄與實作範圍。所有尚未知的值都保留為「待確認」，不預填真實 IP、帳戶或憑證。

@@ -1,45 +1,46 @@
-# Roadmap
+# 分階段計畫與驗收
 
-## Phase 0 — 本次初版
+當前階段：A — 架構文件基準。B之後的工作在環境資訊確認、範圍定案後安排；現有v0.3程式作為參考。
 
-- [x] 正規化事件模型與四種最小轉接器
-- [x] 四條示範規則與本地案件資料流
-- [x] 回應提案／核准紀錄，禁止自動執行
-- [x] 合成資料、API 文件、測試與 CI
+| 階段 | 交付 | 完成條件 | 狀態 |
+| --- | --- | --- | --- |
+| A 架構與文件 | 需求、模組圖、接入、契約、環境表、決策與整合矩陣 | 文件一致、未知值有標示、可追溯至需求 | 本次已整理 |
+| B 環境盤點與選型 | 設備矩陣、拓撲、容量、認證、保存與owner | 優先來源、部署形態及限制記錄於決策表 | 待環境確認 |
+| C 最小端到端實作 | 一個優先來源的PUSH→Raw→Normalized→查詢 | 實際樣本與負向／重送案例通過 | 待B完成 |
+| D 多來源與營運能力 | 其餘來源、broker／搜尋、失敗處理與維運 | 吞吐、延遲、容量、恢復達到B定義的目標 | 待C驗收 |
+| E 偵測與調查整合 | 規則、關聯、案件、證據及timeline | 告警可追溯原文與規則版本 | 待資料基礎穩定 |
+| F 回應／Purple Team／AI | 受控工具、人工核准、授權驗證與唯讀Agent | 角色、證據、實測結果及回復流程可驗證 | 待前置條件完成 |
 
-## v0.2 — 通用 Log 收集
+## B階段需定案的最低集合
 
-- [x] Syslog UDP／TCP／TLS、HTTP JSON／NDJSON、檔案續讀與 CloudWatch poller
-- [x] Raw 保存、通用解析、outbox 重試、cursor 查詢與去重
-- [x] 七類來源的接法與 Fluent Bit／rsyslog 範例
-- [ ] 各廠牌／韌體實機驗證、Palo Alto CSV 與更多設備專用 parser
-- [ ] 佇列容量／retention、收集器監控與完整失敗資料處理
+- 目標是Lab、團隊PoC或正式環境，及其維運owner。
+- 優先設備型號／版本、Log類型與去識別化樣本。
+- 設備到收集器的實際網路路徑、peer可見性與來源識別。
+- 部署OS／平台、可用容量、流量與保存需求。
+- 認證、TLS／代理、管理權限與必要雲端／叢集權限。
+- 優先情境的驗收條件及變更／回復安排。
 
-## v0.3 — 環境變數與來源 API
+詳細欄位見 [環境確認表](environment-checklist.md)。未能確定的項目記錄風險與範圍限制，不以PoC預設值冒充需求。
 
-- [x] 七種來源 IP/CIDR 設定、獨立正規化 PUSH endpoint
-- [x] 一個指令啟動 HTTP 與自動 IP 路由 Syslog 接收器
-- [x] 共通正規化 schema、初版來源欄位映射與設定狀態 API
-- [ ] 實機 parser 樣本驗證、更多產品／型號 profile
+## 後續驗收矩陣
 
-## Phase 1 — 真實資料與調查
+| ID | 對應需求 | 驗收證據 |
+| --- | --- | --- |
+| AC-01 | FR-01/02/04 | 實際允許來源可接入；未知來源拒收；來源衝突有明確結果 |
+| AC-02 | FR-03/05 | 每個選定parser有版本化樣本、預期schema、缺欄及未知格式案例 |
+| AC-03 | FR-05 | 從Normalized／Alert／Case可回查Raw及normalizer版本 |
+| AC-04 | FR-06 | 離線與重啟後按既定語義補送；重複ID與不同內容不混淆 |
+| AC-05 | FR-06 | 解析失敗可定位、修正、重播；磁碟／佇列滿有可觀測處理 |
+| AC-06 | FR-07與非功能需求 | 以實測EPS、大小與查詢負載驗證延遲／容量 |
+| AC-07 | FR-08 | 規則命中至案件／timeline／證據reference的端到端紀錄 |
+| AC-08 | FR-09 | 回應需可驗證的授權與核准；執行及回復具稽核 |
+| AC-09 | FR-09 | Purple Team run具授權範圍、預期／觀察結果與清理 |
+| AC-10 | FR-10 | Agent輸出引用證據，工具不能由來源文字擴權 |
 
-- [ ] 優先完成 Wazuh + Velociraptor、Suricata + Zeek、CloudTrail 三條路徑
-- [ ] Collector 重試、Kafka topics／DLQ 與 Elasticsearch mappings
-- [ ] Timesketch 證據時間線與 DFIR-IRIS 冪等案件同步
-- [ ] OIDC、RBAC、獨立核准者、完整 audit trail 與資料生命週期
+UDP與TCP Syslog不提供應用層持久化確認；驗收時應量測並記錄其協定限制，不宣稱無條件零遺失或exactly-once。
 
-## Phase 2 — 偵測品質
+## 既有PoC基準
 
-- [ ] Sigma 執行／轉換測試與版本化規則管理
-- [ ] 時間窗關聯、告警聚合及誤報標記
-- [ ] 授權 Lab 的 CALDERA／Atomic／Stratus 測試 run tracking
-- [ ] 以實測 run 計算 ATT&CK coverage gaps 與 MTTD
+截至本次架構整理前，程式已具備來源API、IP設定、初版normalizer、通用collector、SQLite暫存、示範偵測／案件，以及56項測試；CI曾驗證Python 3.9／3.12與容器收件。這代表合成測試基準，不替代上述實機與環境驗收。
 
-## Phase 3 — Agent 輔助與部署
-
-- [ ] 五種 Agent 的唯讀 MCP adapter、工具 allowlist 與引用證據
-- [ ] 經驗證的人工作業核准流程、Shuffle 受控執行與回復
-- [ ] Kubernetes／AWS IaC、Secrets 管理、網路隔離與容量測試
-
-每個階段應以可重現的整合測試及合成／已去識別化資料驗收，避免將示範規則誤認為正式偵測能力。
+PoC操作見 [參考手冊](prototype-guide.md)。本輪只整理文件，未新增設備連線、部署或功能實作。
