@@ -132,6 +132,9 @@ def test_socket_collection_outage_restart_and_recovery(tmp_path, tls):
                 wire = str(len(message)).encode() + b" " + message
                 for start in range(0, len(wire), 3):
                     tcp.sendall(wire[start : start + 3])
+                if tls:
+                    # Send TLS close_notify instead of abruptly closing encrypted data in flight.
+                    tcp.unwrap().close()
             wait_until(lambda: len(outbox.batch()) == expected)
             collector.terminate()
             collector.wait(timeout=20)
@@ -160,6 +163,11 @@ def test_socket_collection_outage_restart_and_recovery(tmp_path, tls):
                 assert all(item["transport"] == "syslog_tls" for item in items)
             else:
                 assert {item["transport"] for item in items} == {"syslog_tcp", "syslog_udp"}
+        except Exception:
+            output.flush()
+            print((tmp_path / "services.log").read_text())
+            print("Pending record count:", len(outbox.batch()))
+            raise
         finally:
             for process in reversed(processes):
                 if process.poll() is None:

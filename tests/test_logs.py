@@ -326,3 +326,14 @@ def test_chunked_request_limit():
         assert sent[0]["status"] == 413
 
     asyncio.run(scenario())
+
+
+def test_tls_stream_framing_drains_data_before_clean_eof():
+    from io import BytesIO
+    from dart_lab.tls_receiver import read_frame as read_tls_frame
+
+    stream = BytesIO(b"line one\n5 hello4 test")
+    assert [read_tls_frame(stream) for _ in range(4)] == [b"line one", b"hello", b"test", None]
+    for raw in (b"5 abc", b"65537 x", b"0 ", b"1", b"unterminated"):
+        with pytest.raises(ValueError):
+            read_tls_frame(BytesIO(raw))

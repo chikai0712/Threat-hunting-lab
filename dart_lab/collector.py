@@ -19,6 +19,7 @@ from urllib.request import Request, urlopen
 from uuid import uuid4
 
 from .models import LogRecord
+from .tls_receiver import TLSReceiver
 
 LOG = logging.getLogger("threat-log-collector")
 MAX_FRAME = 65536
@@ -257,7 +258,7 @@ async def serve(options):
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, stop.set)
     task = asyncio.create_task(forward(outbox, options, stop))
-    udp_transport, server = None, None
+    udp_transport, server, tls_receiver = None, None, None
     connections = set()
     try:
         if options.mode == "syslog":
@@ -303,9 +304,20 @@ async def serve(options):
                     writer.close()
                     await writer.wait_closed()
 
-            server = await asyncio.start_server(
-                accept, options.bind, options.port, limit=MAX_FRAME + 1, ssl=tls
-            )
+            if tls:
+                tls_receiver = TLSReceiver(
+                    options.bind,
+                    options.port,
+                    tls,
+                    lambda peer: allowed(peer, networks),
+                    lambda frame, peer: outbox.append(
+                        [record_bytes(frame, options, "syslog_tls", peer)]
+                    ),
+                )
+            else:
+                server = await asyncio.start_server(
+                    accept, options.bind, options.port, limit=MAX_FRAME + 1
+                )
             if not options.no_udp:
                 udp_transport, _ = await loop.create_datagram_endpoint(
                     lambda: DatagramReceiver(outbox, options, networks),
@@ -343,6 +355,8 @@ async def serve(options):
         stop.set()
         if udp_transport:
             udp_transport.close()
+        if tls_receiver:
+            await asyncio.to_thread(tls_receiver.close)
         if server:
             server.close()
             await server.wait_closed()
