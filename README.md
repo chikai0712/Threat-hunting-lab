@@ -1,4 +1,4 @@
-# DART Threat Hunting Lab
+# Threat Hunting Lab
 
 將 Attack → Detect → Investigate → Respond → Improve 架構做成可執行的 Python Lab。此專案為獨立練習框架，與 Coupang 或工具供應商無隸屬關係。
 
@@ -17,8 +17,8 @@
 需要 Python 3.9+；新環境建議使用 3.12。
 
 ```bash
-git clone https://github.com/chikai0712/dart-threat-hunting-lab.git
-cd dart-threat-hunting-lab
+git clone https://github.com/chikai0712/Threat-hunting-lab.git
+cd Threat-hunting-lab
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip

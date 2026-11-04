@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "dart-threat-hunting-lab"
+name = "Threat-hunting-lab"
 version = "0.1.0"
 description = "A runnable DART investigation and detection lab scaffold"
 requires-python = ">=3.9"

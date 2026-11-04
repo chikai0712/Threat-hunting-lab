@@ -22,7 +22,7 @@ def create_app(db_path=None, api_token=None):
         app.state.store = Store(path)
         yield
 
-    app = FastAPI(title="DART Threat Hunting Lab", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="Threat Hunting Lab", version="0.1.0", lifespan=lifespan)
     header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
     def authenticate(key=Depends(header)):
