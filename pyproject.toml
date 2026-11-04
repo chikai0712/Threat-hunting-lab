@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dart-threat-hunting-lab"
+version = "0.1.0"
+description = "A runnable DART investigation and detection lab scaffold"
+requires-python = ">=3.9"
+dependencies = ["fastapi==0.115.12", "uvicorn==0.34.2", "pydantic==2.11.4"]
+
+[project.optional-dependencies]
+dev = ["pytest==8.3.5", "httpx==0.28.1", "ruff==0.11.10"]
+
+[tool.setuptools.packages.find]
+include = ["dart_lab*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"

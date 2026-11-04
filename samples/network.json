@@ -1,0 +1,12 @@
+{
+  "source": "suricata",
+  "payload": {
+    "timestamp": "2026-11-04T01:02:00Z",
+    "src_ip": "192.0.2.10",
+    "dest_ip": "198.51.100.20",
+    "alert": {
+      "signature": "LAB suspicious outbound connection",
+      "severity": 1
+    }
+  }
+}

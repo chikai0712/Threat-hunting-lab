@@ -1,0 +1,11 @@
+{
+  "source": "cloudtrail",
+  "payload": {
+    "eventTime": "2026-11-04T01:04:00Z",
+    "eventName": "StopLogging",
+    "eventSource": "cloudtrail.amazonaws.com",
+    "userIdentity": {
+      "arn": "arn:aws:iam::000000000000:user/lab-demo"
+    }
+  }
+}

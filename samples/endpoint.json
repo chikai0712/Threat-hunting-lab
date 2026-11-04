@@ -1,0 +1,14 @@
+{
+  "source": "wazuh",
+  "payload": {
+    "timestamp": "2026-11-04T01:00:00Z",
+    "agent": {
+      "name": "lab-endpoint-01"
+    },
+    "rule": {
+      "id": "5712",
+      "level": 10,
+      "description": "Repeated authentication failures"
+    }
+  }
+}

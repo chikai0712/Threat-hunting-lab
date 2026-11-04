@@ -1,0 +1,21 @@
+title: AWS CloudTrail Logging Disabled
+id: d9f2f986-836c-44eb-8843-976191257651
+status: experimental
+description: Successful StopLogging API call; validate expected maintenance before escalation.
+author: DART Lab
+date: 2026-11-04
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventName: StopLogging
+  failed:
+    errorCode|exists: true
+  condition: selection and not failed
+falsepositives:
+  - Authorized maintenance in a controlled AWS account
+level: high
+tags:
+  - attack.defense-evasion
+  - attack.t1562.008

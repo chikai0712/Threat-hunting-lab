@@ -1,0 +1,26 @@
+# Role contracts only. No LLM, MCP server, or external execution is connected in v0.1.
+version: 1
+agents:
+  detection:
+    inputs: [normalized_events, sigma_rules]
+    outputs: [alert_recommendations, rule_suggestions]
+    tools: [elk_search, wazuh_read]
+  threat_hunting:
+    inputs: [iocs, hypotheses]
+    outputs: [hunt_findings]
+    tools: [zeek_search, misp_read, opencti_read]
+  investigation:
+    inputs: [case_id, evidence_references]
+    outputs: [timeline, rca_draft]
+    tools: [velociraptor_read, timesketch_read]
+  response:
+    inputs: [case_id, findings]
+    outputs: [response_proposal]
+    tools: [iris_draft, shuffle_plan]
+    approval_required: true
+    execution_enabled: false
+  purple_team:
+    inputs: [authorized_lab_scope, test_plan]
+    outputs: [coverage_observations]
+    tools: [caldera_plan, atomic_plan, stratus_plan]
+    execution_enabled: false

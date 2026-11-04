@@ -1,0 +1,9 @@
+{
+  "source": "falco",
+  "payload": {
+    "time": "2026-11-04T01:06:00Z",
+    "hostname": "lab-node-01",
+    "rule": "Terminal shell in container",
+    "priority": "Warning"
+  }
+}
