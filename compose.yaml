@@ -2,14 +2,29 @@ services:
   api:
     build: .
     ports:
-      - "127.0.0.1:8000:8000"
+      - "${LISTEN_IP:-0.0.0.0}:${HTTP_PORT:-8000}:${HTTP_PORT:-8000}"
+      - "${LISTEN_IP:-0.0.0.0}:${SYSLOG_PORT:-5514}:${SYSLOG_PORT:-5514}/tcp"
+      - "${LISTEN_IP:-0.0.0.0}:${SYSLOG_PORT:-5514}:${SYSLOG_PORT:-5514}/udp"
     environment:
-      DART_API_TOKEN: ${DART_API_TOKEN:?Set DART_API_TOKEN in .env}
+      DART_API_TOKEN: ${DART_API_TOKEN:?Run python3 scripts/init_env.py first}
       DART_DB_PATH: /data/dart.db
+      LISTEN_IP: 0.0.0.0
+      HTTP_PORT: ${HTTP_PORT:-8000}
+      SYSLOG_ENABLED: ${SYSLOG_ENABLED:-true}
+      SYSLOG_PORT: ${SYSLOG_PORT:-5514}
+      SOURCE_PUSH_SPOOL: /data/source-push.db
+      SOURCE_PUSH_REQUIRE_TOKEN: ${SOURCE_PUSH_REQUIRE_TOKEN:-false}
+      FORTINET_IPS: ${FORTINET_IPS:-}
+      PALOALTO_IPS: ${PALOALTO_IPS:-}
+      CISCO_IPS: ${CISCO_IPS:-}
+      WINDOWS_IPS: ${WINDOWS_IPS:-}
+      LINUX_IPS: ${LINUX_IPS:-}
+      AWS_IPS: ${AWS_IPS:-}
+      KUBERNETES_IPS: ${KUBERNETES_IPS:-}
     volumes:
       - dart-data:/data
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "python", "-c", "import os, urllib.request; urllib.request.urlopen('http://localhost:'+os.getenv('HTTP_PORT','8000')+'/health')"]
       interval: 15s
       timeout: 3s
       retries: 3

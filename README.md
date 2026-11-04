@@ -2,8 +2,10 @@
 
 將 Attack → Detect → Investigate → Respond → Improve 架構做成可執行的 Python Lab。此專案為獨立練習框架，與 Coupang 或工具供應商無隸屬關係。
 
-## v0.2 可以做什麼
+## v0.3 可以做什麼
 
+- **只填來源 IP 即可啟用 PUSH**：`.env` 分別設定七類來源的 IP；每種來源有獨立 `/api/v1/logs/<source>` 正規化 API。
+- `threat-lab` 一次啟動 HTTP + 依設備 IP 路由的 Syslog 接收器，來源 Log 轉成共同 schema 並保留原文。
 - **多來源 Log 收集**：Syslog UDP／TCP／TLS、HTTP JSON／NDJSON／純文字、檔案續讀、AWS CloudWatch Logs 輪詢。
 - 解析 RFC3164／RFC5424、CEF、JSON、key=value；未知格式保留原文，提供來源／主機過濾與 cursor 查詢。
 - collector 具 SQLite outbox、HTTP 重試與檔案 checkpoint；提供 Fortinet、Palo Alto、Cisco、Windows／AD、Linux、AWS、Kubernetes 接入說明。
@@ -14,6 +16,18 @@
 - 提供 OpenAPI 文件、三個主要 PoC 與 Kubernetes 額外範例、CI 測試。
 
 **尚未完成：** Kafka／ELK 串流、各廠牌實機相容性驗證、完整供應商欄位解析、跨事件關聯、外部 DFIR 工具串接、LLM／MCP 執行、正式環境部署。`config/agents.yaml` 是五種 Agent 的介面規劃；`rules/sigma/` 是規則範本，Python 引擎尚未讀取 Sigma。
+
+## 建議啟動方式：設定 IP，接收設備 PUSH
+
+```bash
+python3 scripts/init_env.py
+# 編輯 .env：填入 FORTINET_IPS、CISCO_IPS、WINDOWS_IPS 等來源設備／agent IP。
+docker compose up --build -d
+```
+
+或安裝 Python 套件後在 repo 根目錄執行 `threat-lab`，會自動讀取 `.env`。來源留白即停用；設定 IP 後，設備可送至收集器 `5514/TCP 或 UDP`，或對應的 `/api/v1/logs/fortinet` 等 API。設備端仍需設定 Log forwarding 目的地。
+
+**[環境變數、七種 API 與完整設定指南](docs/environment-push.md)**。Docker Desktop／NAT 可能改寫來源 IP，首次實機驗證建議用原生 Python 啟動。
 
 ## 快速開始：Python
 
@@ -27,10 +41,10 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -e '.[dev]'
 export DART_API_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
-uvicorn dart_lab.api:app --host 127.0.0.1 --port 8000
+uvicorn dart_lab.api:app --host 127.0.0.1 --port 8000 --no-proxy-headers
 ```
 
-開啟 <http://127.0.0.1:8000/docs>，在 **Authorize** 輸入剛才產生的 `DART_API_TOKEN`。所有資料 API 都需要 `X-API-Key`；`/health` 及 API 文件可直接讀取。
+開啟 <http://127.0.0.1:8000/docs>，在 **Authorize** 輸入剛才產生的 `DART_API_TOKEN`。舊版與查詢 API 都需要 `X-API-Key`；新的來源 PUSH API 預設依 IP 放行，可另外要求 key。`/health` 及 API 文件可直接讀取。
 
 在另一個終端啟用相同 virtualenv，將 `DART_API_TOKEN` 設為啟動服務時使用的同一組值，再執行：
 
@@ -51,7 +65,7 @@ threat-log-collector --source network-lab --spool data/network-outbox.db syslog
 
 預設收集 `127.0.0.1:5514` 的 UDP／TCP Syslog。再開終端執行 `python scripts/send_syslog.py`，會送出 6 筆合成設備 Log，可在 `/docs` 的 `GET /logs` 查詢。
 
-**完整接入方式：[多來源 Log 收集指南](docs/log-collection.md)**，包含七類來源設定、TLS、來源 CIDR、HTTP／Fluent Bit 範例與 AWS IAM／CloudWatch 前提。collector 可直接在 Python 環境啟動；現有 Compose 仍只啟動 API。
+**完整接入方式：[多來源 Log 收集指南](docs/log-collection.md)**，包含七類來源設定、TLS、來源 CIDR、HTTP／Fluent Bit 範例與 AWS IAM／CloudWatch 前提。v0.3 Compose 已內建 IP 自動路由接收器；下方獨立 collector 可供遠端或 TLS 收集使用。
 
 ## Docker Compose
 
@@ -62,7 +76,7 @@ cp .env.example .env
 docker compose up --build -d
 ```
 
-API 僅綁定本機 `127.0.0.1:8000`，資料保存在 `dart-data` volume。Compose 只啟動本專案 API，不會安裝 Wazuh、Kafka 或其他外部工具。若要從主機執行 demo，請先設定與 `.env` 相同的環境變數；Python 啟動模式不會自動載入 `.env`。
+Compose 依 `LISTEN_IP`（預設全部 IPv4 介面）開放 HTTP 與 TCP／UDP Syslog，資料保存在 `dart-data` volume；所有來源預設留白停用。使用 `threat-lab` 會自動讀 `.env`；直接執行 `uvicorn` 或 demo 則需自行設定環境變數。
 
 ## 架構
 
@@ -98,6 +112,8 @@ tests/             行為與 API 測試
 
 | Endpoint | 功能 |
 | --- | --- |
+| `POST /api/v1/logs/{source}` | 七種獨立來源 PUSH／正規化 API，依環境變數授權 IP |
+| `GET /api/v1/sources` | 查詢啟用來源設定（需要 key） |
 | `POST /logs`、`GET /logs` | 通用 Log 批次匯入與 cursor 查詢 |
 | `POST /collect/{source}` | Agent HTTP JSON / NDJSON / text 匯入 |
 | `POST /ingest` | `{source, payload}` 供應商範例格式 |

@@ -15,6 +15,13 @@
 - [ ] 各廠牌／韌體實機驗證、Palo Alto CSV 與更多設備專用 parser
 - [ ] 佇列容量／retention、收集器監控與完整失敗資料處理
 
+## v0.3 — 環境變數與來源 API
+
+- [x] 七種來源 IP/CIDR 設定、獨立正規化 PUSH endpoint
+- [x] 一個指令啟動 HTTP 與自動 IP 路由 Syslog 接收器
+- [x] 共通正規化 schema、初版來源欄位映射與設定狀態 API
+- [ ] 實機 parser 樣本驗證、更多產品／型號 profile
+
 ## Phase 1 — 真實資料與調查
 
 - [ ] 優先完成 Wazuh + Velociraptor、Suricata + Zeek、CloudTrail 三條路徑

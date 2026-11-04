@@ -9,6 +9,7 @@ from uuid import uuid4
 from .detection import detect
 from .log_parser import parse_log, received_now
 from .models import Event
+from .source_normalizers import normalize_source
 
 
 def now():
@@ -143,22 +144,30 @@ class Store:
                 log_id = hashlib.sha256(identity.encode()).hexdigest()
                 fingerprint = hashlib.sha256(record.model_dump_json().encode()).hexdigest()
                 previous = db.execute(
-                    "SELECT fingerprint FROM logs WHERE id = ?", (log_id,)
+                    "SELECT fingerprint, body FROM logs WHERE id = ?", (log_id,)
                 ).fetchone()
                 if previous:
                     if previous[0] != fingerprint:
                         raise ValueError("record_id already exists with different contents")
-                    results.append({"log_id": log_id, "duplicate": True})
+                    results.append(
+                        {
+                            "log_id": log_id,
+                            "duplicate": True,
+                            "normalized": json.loads(previous[1]).get("normalized"),
+                        }
+                    )
                     continue
                 parsed = parse_log(record.raw, record.format)
                 received_at = received_now()
-                host = record.host or parsed.get("host") or record.peer
+                normalized = normalize_source(record, parsed, received_at)
+                host = normalized["host"]
                 body = {
                     **record.model_dump(),
                     "id": log_id,
                     "received_at": received_at,
                     "host": host,
                     "parsed": parsed,
+                    "normalized": normalized,
                 }
                 db.execute(
                     "INSERT INTO logs(id, fingerprint, source, host, body) VALUES (?, ?, ?, ?, ?)",
@@ -166,21 +175,27 @@ class Store:
                 )
                 event = Event(
                     event_id="log:" + log_id,
-                    timestamp=parsed.get("timestamp", received_at),
+                    timestamp=normalized["timestamp"],
                     source=record.source,
                     host=host,
-                    action=parsed.get("message") or "Log received",
-                    severity=parsed.get("severity", "info"),
+                    action=normalized["action"],
+                    severity=normalized["severity"],
                     details={
                         "log_id": log_id,
                         "ingestion": "generic_log",
                         "parser_status": parsed["status"],
+                        "normalized": normalized,
                         "fields": parsed["fields"],
                     },
                 )
                 self._ingest(db, event)
                 results.append(
-                    {"log_id": log_id, "duplicate": False, "parser_status": parsed["status"]}
+                    {
+                        "log_id": log_id,
+                        "duplicate": False,
+                        "parser_status": parsed["status"],
+                        "normalized": normalized,
+                    }
                 )
         return {"accepted": len(results), "records": results}
 

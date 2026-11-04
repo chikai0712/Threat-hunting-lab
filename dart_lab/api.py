@@ -14,20 +14,33 @@ from .adapters import normalize
 from .detection import RULES
 from .models import ApprovalRequest, Event, IngestRequest, ProposalRequest, LogBatch, LogRecord
 from .store import Store
+from .sources import SourceSettings
+from .source_api import register_source_routes
+from .push_gateway import PushGateway
 
 
-def create_app(db_path=None, api_token=None):
+def create_app(db_path=None, api_token=None, source_settings=None):
     token = api_token if api_token is not None else os.getenv("DART_API_TOKEN", "")
     path = db_path or os.getenv("DART_DB_PATH", "data/dart.db")
+
+    settings = source_settings or SourceSettings.from_env()
 
     @asynccontextmanager
     async def lifespan(app):
         if len(token) < 24:
             raise RuntimeError("DART_API_TOKEN must contain at least 24 characters")
         app.state.store = Store(path)
-        yield
+        gateway = None
+        if settings.syslog_enabled and any(settings.networks.values()):
+            gateway = PushGateway(settings, app.state.store)
+            await gateway.start()
+        try:
+            yield
+        finally:
+            if gateway:
+                await gateway.close()
 
-    app = FastAPI(title="Threat Hunting Lab", version="0.2.0", lifespan=lifespan)
+    app = FastAPI(title="Threat Hunting Lab", version="0.3.0", lifespan=lifespan)
     app.add_middleware(BodyLimitMiddleware)
     header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
@@ -36,6 +49,7 @@ def create_app(db_path=None, api_token=None):
             raise HTTPException(401, "Invalid API key")
 
     protected = [Depends(authenticate)]
+    register_source_routes(app, settings, token, authenticate)
 
     @app.get("/health")
     def health():

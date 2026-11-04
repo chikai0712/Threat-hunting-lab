@@ -4,12 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "Threat-hunting-lab"
-version = "0.2.0"
+version = "0.3.0"
 description = "A runnable DART investigation and detection lab scaffold"
 requires-python = ">=3.9"
-dependencies = ["fastapi==0.115.12", "uvicorn==0.34.2", "pydantic==2.11.4"]
+dependencies = ["fastapi==0.115.12", "uvicorn==0.34.2", "pydantic==2.11.4", "python-dotenv==1.1.0"]
 
 [project.scripts]
+threat-lab = "dart_lab.server:main"
 threat-log-collector = "dart_lab.collector:main"
 
 [project.optional-dependencies]

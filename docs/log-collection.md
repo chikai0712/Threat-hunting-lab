@@ -1,5 +1,7 @@
 # 多來源 Log 收集
 
+v0.3 已新增 [環境變數 IP 設定與獨立 PUSH API](environment-push.md)，可一次啟動內建 Syslog receiver。以下保留獨立 collector 的進階接法。
+
 v0.2 提供可執行的通用收集入口。支援不代表每個品牌、韌體、事件類型的欄位解析都已驗證；目前測試使用合成資料與模擬 CloudWatch API，尚未連線至實體設備或雲端帳戶。
 
 ## 接入矩陣
