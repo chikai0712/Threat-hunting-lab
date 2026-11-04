@@ -1,13 +1,18 @@
 import os
+import hashlib
+import json
 import secrets
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.security import APIKeyHeader
+from pydantic import ValidationError
+
+from .body_limit import BodyLimitMiddleware
 
 from .adapters import normalize
 from .detection import RULES
-from .models import ApprovalRequest, Event, IngestRequest, ProposalRequest
+from .models import ApprovalRequest, Event, IngestRequest, ProposalRequest, LogBatch, LogRecord
 from .store import Store
 
 
@@ -22,7 +27,8 @@ def create_app(db_path=None, api_token=None):
         app.state.store = Store(path)
         yield
 
-    app = FastAPI(title="Threat Hunting Lab", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="Threat Hunting Lab", version="0.2.0", lifespan=lifespan)
+    app.add_middleware(BodyLimitMiddleware)
     header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
     def authenticate(key=Depends(header)):
@@ -46,6 +52,73 @@ def create_app(db_path=None, api_token=None):
         except (KeyError, ValueError, TypeError, AttributeError):
             raise HTTPException(422, "Payload does not match the documented source format")
         return app.state.store.ingest(event)
+
+    @app.post("/logs", dependencies=protected)
+    def logs_ingest(batch: LogBatch):
+        try:
+            return app.state.store.ingest_logs(batch.records)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc))
+
+    @app.get("/logs", dependencies=protected)
+    def logs(
+        source: str = None,
+        host: str = None,
+        after: int = Query(0, ge=0),
+        limit: int = Query(100, ge=1, le=1000),
+    ):
+        return app.state.store.list_logs(source, host, after, limit)
+
+    @app.post("/collect/{source}", dependencies=protected)
+    async def collect(
+        source: str,
+        request: Request,
+        format: str = "auto",
+        host: str = None,
+        vendor: str = None,
+        product: str = None,
+        asset_type: str = "other",
+    ):
+        """Agent-friendly JSON object/array, NDJSON, or newline-delimited text input."""
+        try:
+            raw = (await request.body()).decode("utf-8")
+            content_type = request.headers.get("content-type", "").split(";")[0].strip()
+            if content_type == "application/json":
+                data = json.loads(raw)
+                items = data if isinstance(data, list) else [data]
+                if not all(isinstance(item, dict) for item in items):
+                    raise ValueError("JSON input must contain objects")
+                lines = [json.dumps(item, ensure_ascii=False) for item in items]
+                format = "json"
+            else:
+                lines = [line for line in raw.splitlines() if line.strip()]
+            key = request.headers.get("idempotency-key")
+            records = [
+                LogRecord(
+                    source=source,
+                    raw=line,
+                    format=format,
+                    host=host,
+                    vendor=vendor,
+                    product=product,
+                    asset_type=asset_type,
+                    record_id=hashlib.sha256(f"{key}:{i}".encode()).hexdigest() if key else None,
+                )
+                for i, line in enumerate(lines)
+            ]
+            if not 1 <= len(records) <= 5000:
+                raise ValueError("expected 1-5000 records")
+        except (ValueError, UnicodeError, ValidationError, RecursionError):
+            raise HTTPException(
+                422, "Expected 1-5000 valid records, <=64 KiB characters each, with valid metadata"
+            )
+        # SQLite work runs outside the ASGI event loop.
+        from starlette.concurrency import run_in_threadpool
+
+        try:
+            return await run_in_threadpool(app.state.store.ingest_logs, records)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc))
 
     @app.get("/events", dependencies=protected)
     def events(limit: int = Query(100, ge=1, le=1000)):

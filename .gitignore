@@ -10,3 +10,10 @@ data/
 *.db-shm
 *.db-wal
 .DS_Store
+
+# Local log data and TLS credentials
+*.log
+*.pem
+*.key
+*.p12
+*.pfx

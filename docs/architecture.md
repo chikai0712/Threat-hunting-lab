@@ -12,13 +12,13 @@
 | --- | --- |
 | event_id | 去重 ID |
 | timestamp | 含時區的原始事件時間 |
-| source | wazuh / suricata / falco / cloudtrail |
+| source | 原有四種原生來源，或自訂的設備／應用程式來源名稱 |
 | host、actor | 可選的主機或操作主體 |
 | action | 描述或 API 操作 |
 | severity | info / low / medium / high / critical |
 | details | 原始 payload，可能包含敏感資訊 |
 
-案件時間線目前只含觸發事件；後續證據收集與 RCA 需由分析者處理。回應狀態為 `pending_approval → approved`，核准後仍為 `execution_enabled=false`。未實作執行器或任何對外工具呼叫。
+案件時間線目前只含觸發事件；後續證據收集與 RCA 需由分析者處理。回應狀態為 `pending_approval → approved`，核准後仍為 `execution_enabled=false`。未實作回應執行器。v0.2 collector 可呼叫 Log API／AWS CloudWatch Logs，詳見 [收集指南](log-collection.md)。
 
 ## 目標架構（尚未部署）
 
@@ -46,3 +46,9 @@ ELK 建議依 ECS 建立正式 mapping；現在的簡化 Event **不是完整 EC
 ## AI + MCP 邊界
 
 五種角色見 `config/agents.yaml`。此檔沒有執行程式讀取，也不會觸發模型或工具。後續 MCP adapter 應具備工具 allowlist、讀寫權限隔離、來源證據引用及 audit trail。來自日誌、情資及工具回傳的文字都視為不可信資料，不能授權工具執行。回應執行需在身分驗證與政策層獨立實作，不能依賴 prompt 或本版自述 reviewer 欄位。
+
+## v0.2 收集儲存
+
+新增 logs 表，既有資料庫啟動時以 CREATE TABLE IF NOT EXISTS 增加，原有資料不需清除。每筆 Log 保存 raw／optional raw_base64、來源 metadata、receipt time 與解析狀態，並在同一 transaction 產生可查詢的通用 Event。泛用 Log 不會直接套用原生四條偵測規則。
+
+各 collector 的 SQLite outbox 與中央 Store 獨立；forwarder 成功收到 HTTP acknowledgement 後才移除暫存記錄。這是 Lab 等級的持久化重試流程，尚非 Kafka consumer／分散式 exactly-once 系統。

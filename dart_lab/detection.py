@@ -33,6 +33,8 @@ RULES = [
 
 
 def detect(event):
+    if event.details.get("ingestion") == "generic_log":
+        return []
     action = event.action.lower()
     matched = {
         "endpoint-auth-failure": event.severity in ("high", "critical")

@@ -5,3 +5,10 @@ data
 __pycache__
 .pytest_cache
 .ruff_cache
+
+# Local log data and TLS credentials
+*.log
+*.pem
+*.key
+*.p12
+*.pfx

@@ -7,6 +7,14 @@
 - [x] 回應提案／核准紀錄，禁止自動執行
 - [x] 合成資料、API 文件、測試與 CI
 
+## v0.2 — 通用 Log 收集
+
+- [x] Syslog UDP／TCP／TLS、HTTP JSON／NDJSON、檔案續讀與 CloudWatch poller
+- [x] Raw 保存、通用解析、outbox 重試、cursor 查詢與去重
+- [x] 七類來源的接法與 Fluent Bit／rsyslog 範例
+- [ ] 各廠牌／韌體實機驗證、Palo Alto CSV 與更多設備專用 parser
+- [ ] 佇列容量／retention、收集器監控與完整失敗資料處理
+
 ## Phase 1 — 真實資料與調查
 
 - [ ] 優先完成 Wazuh + Velociraptor、Suricata + Zeek、CloudTrail 三條路徑
